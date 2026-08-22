@@ -11,6 +11,11 @@ function normalizePhone(value: string) {
   return `+${digits}`;
 }
 
+function phoneLoginEmail(value: string) {
+  const phone = normalizePhone(value);
+  return `phone-${phone.slice(1)}@sharda-minority-convent.invalid`;
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   if (!supabase) return Response.json({ error: "Authentication is not configured." }, { status: 503 });
@@ -30,12 +35,20 @@ export async function POST(request: Request) {
   if (!url || !serviceKey) return Response.json({ error: "Server-side user provisioning is not configured." }, { status: 503 });
   const admin = createAdminClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const temporaryPassword = `Smc@${randomBytes(6).toString("base64url")}9`;
-  const credentials = identifier.includes("@")
-    ? { email: identifier.toLowerCase(), email_confirm: true }
-    : { phone: normalizePhone(identifier), phone_confirm: true };
-  const { data, error } = await admin.auth.admin.createUser({ ...credentials, password: temporaryPassword, user_metadata: { full_name: fullName, role } });
+  const usesEmail = identifier.includes("@");
+  const phone = usesEmail ? null : normalizePhone(identifier);
+  const email = usesEmail ? identifier.toLowerCase() : phoneLoginEmail(identifier);
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    password: temporaryPassword,
+    user_metadata: { full_name: fullName, role, login_phone: phone },
+  });
   if (error) return Response.json({ error: error.message }, { status: 400 });
-  const { error: profileError } = await admin.from("profiles").update({ role, full_name: fullName }).eq("id", data.user.id);
+  const { error: profileError } = await admin
+    .from("profiles")
+    .update({ role, full_name: fullName, email: usesEmail ? email : null, phone })
+    .eq("id", data.user.id);
   if (profileError) {
     await admin.auth.admin.deleteUser(data.user.id);
     return Response.json({ error: "The login was rolled back because its school role could not be assigned." }, { status: 500 });
