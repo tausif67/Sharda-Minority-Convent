@@ -18,8 +18,25 @@ export default function SetupAccountForm() {
 
     let active = true;
     const checkSession = async () => {
-      const code = new URL(window.location.href).searchParams.get("code");
-      if (code) await supabase.auth.exchangeCodeForSession(code);
+      const currentUrl = new URL(window.location.href);
+      const hash = new URLSearchParams(currentUrl.hash.slice(1));
+      const linkError = hash.get("error_description");
+      if (linkError) {
+        if (active) setError(decodeURIComponent(linkError.replace(/\+/g, " ")));
+        return;
+      }
+
+      const accessToken = hash.get("access_token");
+      const refreshToken = hash.get("refresh_token");
+      const code = currentUrl.searchParams.get("code");
+      if (accessToken && refreshToken) {
+        const { error: sessionError } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        if (sessionError && active) setError(sessionError.message);
+      } else if (code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError && active) setError(exchangeError.message);
+      }
+
       const { data } = await supabase.auth.getSession();
       if (active && data.session) {
         window.history.replaceState({}, "", "/setup-account");
