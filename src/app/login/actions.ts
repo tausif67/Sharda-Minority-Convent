@@ -12,6 +12,11 @@ function normalizePhone(value: string) {
   return `+${digits}`;
 }
 
+function phoneLoginEmail(value: string) {
+  const phone = normalizePhone(value);
+  return `phone-${phone.slice(1)}@sharda-minority-convent.invalid`;
+}
+
 export async function login(_: LoginState, formData: FormData): Promise<LoginState> {
   const identifier = String(formData.get("identifier") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -22,7 +27,7 @@ export async function login(_: LoginState, formData: FormData): Promise<LoginSta
 
   const credentials = identifier.includes("@")
     ? { email: identifier.toLowerCase(), password }
-    : { phone: normalizePhone(identifier), password };
+    : { email: phoneLoginEmail(identifier), password };
   const { error } = await supabase.auth.signInWithPassword(credentials);
   if (error) return { error: "Email/phone or password is incorrect." };
   redirect("/dashboard");
